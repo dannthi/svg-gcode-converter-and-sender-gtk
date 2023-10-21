@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 gcode-serial = "0.1.4"
-gtk4 = { version = "0.7.3", features = ["v4_8"] }
+gtk4 = { version = "0.7.3", features = ["v4_8", "v4_12"] }
 roxmltree = "0.18.1"
 svg2gcode = "0.1.3"
