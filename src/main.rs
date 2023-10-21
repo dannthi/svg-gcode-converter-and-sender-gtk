@@ -3,20 +3,17 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::str;
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use gtk4 as gtk;
-use gtk::glib;
 use gtk::prelude::*;
-use gtk::{Application, ApplicationWindow, Builder, Button, FileChooserAction, FileChooserDialog, ResponseType, TextView, FileFilter};
+use gtk::{glib, Application, ApplicationWindow, Builder, Button, FileChooserAction, FileChooserDialog, ResponseType, TextView, FileFilter};
 
 use svg2gcode::{svg2program, ConversionOptions, ConversionConfig, Machine};
 use roxmltree::Document;
 
+
 fn main() { // Default GTK setup
     let application = Application::new(
-        Some("com.example.myapp"),
+        Some("de.dhbw.lasergraviermaschine"),
         Default::default(),
     );
     application.connect_activate(build_ui);
@@ -37,9 +34,12 @@ pub fn build_ui(application: &Application) {
     let text_view: TextView = builder.object("text_view").expect("Couldn't get text_view");
     let send_button: Button = builder.object("send_button").expect("Couldn't get builder");
 
+    // send_button.connect_clicked(glib::clone!(@weak window, @weak text_view => move |_|{
+    //     // TODO
+    //     return;
+    // }));
 
     open_button.connect_clicked(glib::clone!(@weak window, @weak text_view => move |_| {
-
         // Create a new file chooser dialog
         let file_chooser = FileChooserDialog::new(
             Some("Choose SVG-File"),
@@ -54,87 +54,55 @@ pub fn build_ui(application: &Application) {
         filter.set_name(Some("SVG-Dateien"));
         file_chooser.add_filter(&filter);
 
-        let document = Rc::new(RefCell::new(Document::parse("")));
+        let mut string_vector: Vec<String> = Vec::new(); 
+    
+        // Connect the response signal to handle the user's choice
+        file_chooser.connect_response(|file_chooser, ResponseType::Ok| {
+            file_chooser_converter(file_chooser, &text_view, &mut string_vector)
+        });       
+        window.show();
 
-        
-
-        file_chooser.connect_response({
-            let cloned_document = Rc::clone(&document);
-                    
-            move |d: &FileChooserDialog, response: ResponseType| {
-                if response == ResponseType::Ok {
-                    let file = d.file().expect("Couldn't get file");
-        
-                    let filename = file.path().expect("Couldn't get file path");
-                    let file = File::open(&filename.as_path()).expect("Couldn't open file");
-        
-                    let mut reader = BufReader::new(file);
-                    let mut contents = String::new();
-                    let _ = reader.read_to_string(&mut contents);
-        
-                    println!("File contents:\n{}", contents);
-        
-                    let parsed_document = Document::parse(&contents.as_str());
-                    if let Ok(parsed_doc) = parsed_document {
-                        *cloned_document.borrow_mut() = parsed_document;
-                    } else {
-                        println!("Error parsing SVG file");
-                        return;
-                    }            
-                }
-        
-                d.close();
-            }
-        });
-
-        // Convert text of SVG-File to G-Code and display it in text_view
-        let config = ConversionConfig::default();
-        let options = ConversionOptions::default();
-        let machine = Machine::default();
-
-        let document_contents = document.borrow();
-
-        let program =
-            svg2program(&document_contents.unwrap(), &config, options, machine);
-
-        let mut string = String::new();
-
-        for x in program.iter() {
-            // Append the current element to the existing text in the text_view
-            string.push_str(x.to_string().as_str());
-            // Append a newline to separate each element on a new line
-            string.push_str("\n");
-        }
-        text_view.buffer().set_text(&string);
-
-        file_chooser.show();
     }));
-
-    window.show();
 }
 
 
+pub fn file_chooser_converter(d: &FileChooserDialog, text_view: &TextView, string_vector: &mut Vec<String>) {
+    let mut string = String::new();
+    let mut document = Document::parse("");
 
-// Connect the response signal to handle the user's choice
-        // file_chooser.connect_response(move |d: &FileChooserDialog, response: ResponseType| {
-        //     if response == ResponseType::Ok {
-        //         let file = d.file().expect("Couldn't get file");
+    let file = d.file().expect("Couldn't get file");
+    let filename = file.path().expect("Couldn't get file path");
+    let file = File::open(&filename.as_path()).expect("Couldn't open file");
 
-        //         let filename = file.path().expect("Couldn't get file path");
-        //         let file = File::open(&filename.as_path()).expect("Couldn't open file");
+    let mut reader = BufReader::new(file);
+    let mut contents = String::new();
+    let _ = reader.read_to_string(&mut contents);
 
-        //         let mut reader = BufReader::new(file);
-        //         let mut contents = String::new();
-        //         let _ = reader.read_to_string(&mut contents);
+    println!("File contents:\n{}", contents);
+    
+    document = Document::parse(&contents.as_str());
+    
+    // Convert text of SVG-File to G-Code and display it in text_view
+    let config = ConversionConfig::default();
+    let options = ConversionOptions::default();
+    let machine = Machine::default();
 
-        //         println!("File contents:\n{}", contents);
+    let program =
+        svg2program(&document.unwrap(), &config, options, machine);
 
-        //         document = Document::parse(&contents.as_str());
-        //         if document.is_err() {
-        //             println!("Error parsing SVG file");
-        //             return;
-        //         }            
-        //     }
+    for x in program.iter() {
+        // Append the current element to the existing text in the text_view
+        string.push_str(x.to_string().as_str());
+        // Append a newline to separate each element on a new line
+        string.push_str("\n");
+        string_vector.push(x.to_string());
+    }
 
-        //     d.close();
-        // });
+    text_view.buffer().set_text(&string);
+
+    d.show();
+    d.close();
+
+    // return (d.clone(), ResponseType::Ok);
+}
+
