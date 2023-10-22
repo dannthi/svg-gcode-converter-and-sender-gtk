@@ -5,11 +5,12 @@ use std::str;
 
 use gtk4 as gtk;
 use gtk::prelude::*;
-use gtk::{gio, glib, Application, ApplicationWindow, Builder, Button, FileDialog, ResponseType, TextView, FileFilter};
+use gtk::{gio, glib, Application, ApplicationWindow, Builder, Button, TextView, DropDown};
 
 use svg2gcode::{svg2program, ConversionOptions, ConversionConfig, Machine};
+use serialport::{SerialPort, DataBits, StopBits, FlowControl, Parity};
 use roxmltree::Document;
-
+use std::sync::{Arc, Mutex};
 
 fn main() { // Default GTK setup
     let application = Application::new(
@@ -32,14 +33,43 @@ pub fn build_ui(application: &Application) {
     window.set_application(Some(application));
     let open_button: Button = builder.object("open_button").expect("Couldn't get builder");
     let text_view: TextView = builder.object("text_view").expect("Couldn't get text_view");
+    let filename_view: TextView = builder.object("filename_view").expect("Couldn't get filename_view");
     let send_button: Button = builder.object("send_button").expect("Couldn't get builder");
+    let port_dropdown: DropDown = builder.object("list_ports").expect("Couldn't get builder");
 
-    send_button.connect_clicked(glib::clone!(@weak window, @weak text_view => move |_|{
-        // TODO
+    let g_code_vec: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let ports = serialport::available_ports().expect("No ports found!");
+    println!("Available ports: {:?}", ports);
+    port_dropdown.factory();
+
+    send_button.connect_clicked(glib::clone!(@weak window, @weak text_view, @weak g_code_vec => move |_|{
+        let g_code_vec = g_code_vec.lock().expect("Mutex lock failed").clone();
+
+        if g_code_vec.is_empty() {
+            println!("Please import SVG-File first");
+            return;
+        }
+        else{
+            let mut port = serialport::new("/dev/ttyACM0", 9600)
+            .data_bits(DataBits::Eight)
+            .flow_control(FlowControl::None)
+            .parity(Parity::None)
+            .stop_bits(StopBits::One)
+            .timeout(std::time::Duration::from_millis(10))
+            .open()
+            .expect("Failed to open port");
+
+            for x in g_code_vec.iter() {
+                port.write(x.as_bytes()).expect("Write failed");
+            }
+        }
+
+        println!{"{:?}", g_code_vec};
         return;
     }));
 
-    open_button.connect_clicked(glib::clone!(@weak window, @weak text_view => move |_| {
+    open_button.connect_clicked(glib::clone!(@weak window, @weak text_view, @weak filename_view => move |_| {
         // Create a new file chooser dialog
         let filter = gtk::FileFilter::new();
         filter.add_mime_type("image/svg+xml"); //See: https://stackoverflow.com/questions/11918977/right-mime-type-for-svg-images-with-fonts-embedded
@@ -53,29 +83,36 @@ pub fn build_ui(application: &Application) {
             .accept_label("Open")
             .filters(&filters)
             .build();
-    
+
+        // Clone g_code_vec to use and modify it in the closure
+        let g_code_vec_clone = Arc::clone(&g_code_vec);
+        
         // Connect the response signal to handle the user's choice
         file_chooser.open(Some(&window), gio::Cancellable::NONE, move |file| {
             if let Ok(file) = file {
-                let filename = file.path().expect("Couldn't get file path");
-                let file = File::open(filename).expect("Couldn't open file");
+                // Get the g_code_vec from the closure
+                let mut temp_g_code_vec = g_code_vec_clone.lock().unwrap();
 
+                let filename = file.path().expect("Couldn't get file path");   
+                let file = File::open(&filename).expect("Couldn't open file");
                 let mut reader = BufReader::new(file);
                 let mut contents = String::new();
                 let _ = reader.read_to_string(&mut contents);
 
-                let g_code_vec = file_converter(contents);
-
+                // Call function to convert SVG-File to G-Code in string format
+                *temp_g_code_vec = file_converter(contents);
                 let mut g_code_string = String::new();
-
-                for x in g_code_vec.iter() {
+        
+        
+                for x in temp_g_code_vec.iter() {
                     g_code_string.push_str(x.as_str());
                     g_code_string.push_str("\n");
                 }
-
-                text_view.buffer().set_text(&g_code_string);
+                println!("{:?}", filename.to_str().unwrap());
+                filename_view.buffer().set_text(&filename.to_str().unwrap());
+                text_view.buffer().set_text(&g_code_string);     
             }
-        });        
+        });
     }));
 
 
@@ -104,4 +141,3 @@ pub fn file_converter(contents: String) -> Vec<String> {
 
     return string_vector;
 }
-

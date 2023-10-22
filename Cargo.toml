@@ -9,4 +9,5 @@ edition = "2021"
 gcode-serial = "0.1.4"
 gtk4 = { version = "0.7.3", features = ["v4_8", "v4_12"] }
 roxmltree = "0.18.1"
+serialport = "4.2.2"
 svg2gcode = "0.1.3"

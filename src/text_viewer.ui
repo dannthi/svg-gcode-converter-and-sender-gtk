@@ -19,21 +19,36 @@
           </object>
         </child>
         <child>
+          <object class="GtkTextView" id="filename_view">
+            <property name="editable">False</property>
+            <property name="wrap-mode">GTK_WRAP_WORD</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkSeparator"/>
+        </child>
+        <child>
           <object class="GtkScrolledWindow" id="scrolled_window">
             <property name="hexpand">True</property>
             <property name="vexpand">True</property>
             <child>
-              <object class="GtkTextView" id="text_view"/>
+              <object class="GtkTextView" id="text_view">
+                <property name="editable">False</property>
+              </object>
             </child>
           </object>
         </child>
         <child>
-          <object class="GtkWindow" id="target_window">
-            <property name="hexpand">True</property>
-            <property name="vexpand">True</property>
-            <child>
-              <object class="GtkTextView" id="target_view"/>
-            </child>
+          <object class="GtkDropDown" id="list_ports">
+            <property name="model">
+              <object class="GtkStringList">
+                <items>
+                  <!-- <item translatable="yes">Factory</item>
+                  <item translatable="yes">Home</item>
+                  <item translatable="yes">Subway</item> -->
+                </items>
+              </object>
+            </property>
           </object>
         </child>
         <child>
