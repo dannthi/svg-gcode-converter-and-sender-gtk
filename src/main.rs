@@ -3,9 +3,10 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::str;
 
+// use gtk::ffi::GtkStringList;
 use gtk4 as gtk;
 use gtk::prelude::*;
-use gtk::{gio, glib, Application, ApplicationWindow, Builder, Button, TextView, DropDown};
+use gtk::{gio, glib, Application, ApplicationWindow, Builder, Button, TextView, StringList, ListItemFactory};
 
 use svg2gcode::{svg2program, ConversionOptions, ConversionConfig, Machine};
 use serialport::{SerialPort, DataBits, StopBits, FlowControl, Parity};
@@ -35,14 +36,15 @@ pub fn build_ui(application: &Application) {
     let text_view: TextView = builder.object("text_view").expect("Couldn't get text_view");
     let filename_view: TextView = builder.object("filename_view").expect("Couldn't get filename_view");
     let send_button: Button = builder.object("send_button").expect("Couldn't get builder");
-    let port_dropdown: DropDown = builder.object("list_ports").expect("Couldn't get builder");
+    let port_dropdown: StringList = builder.object("list_ports").expect("Couldn't get builder");
 
     let g_code_vec: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 
     let ports = serialport::available_ports().expect("No ports found!");
     println!("Available ports: {:?}", ports);
-    port_dropdown.factory();
-
+    // port_dropdown.factory();
+    port_dropdown.append("test");
+    
     send_button.connect_clicked(glib::clone!(@weak window, @weak text_view, @weak g_code_vec => move |_|{
         let g_code_vec = g_code_vec.lock().expect("Mutex lock failed").clone();
 
@@ -51,7 +53,7 @@ pub fn build_ui(application: &Application) {
             return;
         }
         else{
-            let mut port = serialport::new("/dev/ttyACM0", 9600)
+            let mut port = serialport::new("/dev/ttyACM0", 115200)
             .data_bits(DataBits::Eight)
             .flow_control(FlowControl::None)
             .parity(Parity::None)
@@ -60,9 +62,13 @@ pub fn build_ui(application: &Application) {
             .open()
             .expect("Failed to open port");
 
-            for x in g_code_vec.iter() {
-                port.write(x.as_bytes()).expect("Write failed");
-            }
+            // let port_factory = ListItemFactory::<String>::new();
+            // // Set the custom factory for the dropdown.
+            // port_dropdown.set_factory(Some(&port_factory));
+
+            // for x in g_code_vec.iter() {
+            //     port.write(x.as_bytes()).expect("Write failed");
+            // }
         }
 
         println!{"{:?}", g_code_vec};

@@ -39,9 +39,9 @@
           </object>
         </child>
         <child>
-          <object class="GtkDropDown" id="list_ports">
+          <object class="GtkDropDown">
             <property name="model">
-              <object class="GtkStringList">
+              <object class="GtkStringList" id="list_ports">
                 <items>
                   <!-- <item translatable="yes">Factory</item>
                   <item translatable="yes">Home</item>
