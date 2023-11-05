@@ -4,24 +4,40 @@
     <property name="title" translatable="yes">SVG to G-Code Converter and Sender</property>
     <property name="default-width">800</property>
     <property name="default-height">500</property>
+    <child type="titlebar">
+      <object class="GtkHeaderBar">
+        <property name="show-title-buttons">True</property>
+        <child type="start">
+          <object class="GtkButton" id="info_button">
+            <property name="label" translatable="yes">info</property>
+            <!-- <property name="icon-name">view-list-symbolic</property> -->
+            <property name="icon-name">help-info-symbolic</property>
+            <property name="tooltip-text" translatable="yes">Open info</property>
+          </object>
+        </child>
+      </object>
+    </child>
     <child>
       <object class="GtkBox" id="v_box">
         <property name="orientation">vertical</property>
+        <property name="spacing">6</property>
         <child>
-          <object class="GtkBox">
+          <object class="GtkBox" id="horizontal_box_file">
+            <property name="orientation">horizontal</property>
             <child>
               <object class="GtkButton" id="open_button">
                 <property name="label" translatable="yes">Open</property>
                 <property name="icon-name">document-open-symbolic</property>
-                <property name="tooltip-text" translatable="yes">Open</property>
+                <property name="tooltip-text" translatable="yes">Open SVG-File</property>
               </object>
             </child>
-          </object>
-        </child>
-        <child>
-          <object class="GtkTextView" id="filename_view">
-            <property name="editable">False</property>
-            <property name="wrap-mode">GTK_WRAP_WORD</property>
+            <child>
+              <object class="GtkTextView" id="filename_view">
+                <property name="editable">False</property>
+                <property name="wrap-mode">GTK_WRAP_WORD</property>
+                <property name="hexpand">True</property>
+              </object>
+            </child>
           </object>
         </child>
         <child>
@@ -39,25 +55,29 @@
           </object>
         </child>
         <child>
-          <object class="GtkDropDown">
-            <property name="model">
-              <object class="GtkStringList" id="list_ports">
-                <items>
-                  <!-- <item translatable="yes">Factory</item>
-                  <item translatable="yes">Home</item>
-                  <item translatable="yes">Subway</item> -->
-                </items>
-              </object>
-            </property>
-          </object>
+          <object class="GtkSeparator"/>
         </child>
         <child>
-          <object class="GtkBox">
+          <object class="GtkBox" id="horizontal_box_send">
+            <property name="orientation">horizontal</property>
             <child>
               <object class="GtkButton" id="send_button">
                 <property name="label" translatable="yes">Send</property>
                 <property name="icon-name">document-print-symbolic</property>
-                <property name="tooltip-text" translatable="yes">Send</property>
+                <property name="tooltip-text" translatable="yes">Send G-Code</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkDropDown" id="dropdown_ports">
+                <property name="model">
+                  <object class="GtkStringList" id="list_ports">
+                    <items>
+                      <!-- Items will be added while code runs -->
+                    </items>
+                  </object>
+                </property>
+                <property name="hexpand">True</property>
+                <property name="tooltip-text" translatable="yes">Choose port</property>
               </object>
             </child>
           </object>
