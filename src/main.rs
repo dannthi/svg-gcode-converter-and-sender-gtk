@@ -8,19 +8,21 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::str;
-use std::cell::RefCell;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
+use std::io::{Error, ErrorKind, Result};
 
 // gtk imports
 use gtk4 as gtk;
 use gtk::prelude::*;
-use gtk::{gio, glib, AboutDialog, Application, ApplicationWindow, Builder, Button, DropDown, TextView, StringList, Shortcut, ShortcutAction, ShortcutController, ShortcutTrigger, HeaderBar, glib::GString};
+use gtk::{gio, glib, Application, ApplicationWindow, Builder, Button, DropDown, TextView, StringList, glib::GString, Window};
 
+use serialport::SerialPortInfo;
 // additional imports
 use svg2gcode::{svg2program, ConversionOptions, ConversionConfig, Machine};
-// use serialport::{SerialPort, DataBits, StopBits, FlowControl, Parity};
 use grbli::service::device_service::{DeviceService, DeviceEndpointType};
+use grbli::device::command::state::GET_INFO_EXTENDED;
 use roxmltree::Document;
+use serialport;
 
 fn main() { 
     // Default GTK setup
@@ -48,11 +50,11 @@ pub fn build_ui(application: &Application) {
     let text_view: TextView = builder.object("text_view").expect("Couldn't get text_view");
     let filename_view: TextView = builder.object("filename_view").expect("Couldn't get filename_view");
     let send_button: Button = builder.object("send_button").expect("Couldn't get builder");
-    let port_dropdown_list: StringList = builder.object("list_ports").expect("Couldn't get builder");
-    let port_dropdown: DropDown = builder.object("dropdown_ports").expect("Couldn't get builder");
-    let info_button: Button = builder.object("info_button").expect("Couldn't get builder");
+    // let port_dropdown_list: StringList = builder.object("list_ports").expect("Couldn't get builder");
+    // let port_dropdown: DropDown = builder.object("dropdown_ports").expect("Couldn't get builder");
+    let help_button: Button = builder.object("info_button").expect("Couldn't get builder");
 
-    // Set shortcuts
+    // Set shortcuts -- doesn't work somehow?
     // let close_window_trigger = ShortcutTrigger::parse_string("<Control>W").unwrap();
     // let close_window_action = ShortcutAction::parse_string("window.destroy").unwrap(); // hier fehler
 
@@ -63,61 +65,88 @@ pub fn build_ui(application: &Application) {
     let g_code_vec: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 
     // Scan for serial ports
-    // let ports = serialport::available_ports().expect("No ports found!");
+        // Option 1
     let ports = DeviceService::get_available_devices();
-    // let mut service = DeviceService::new();
-    let service = Arc::new(Mutex::new(DeviceService::new()));
-
-
     println!("Available ports: {:?}", ports);
-    for (port, _) in ports {
-        println!("{:?}", port);
-        // println!("{}", port.port_name);
-        // port_dropdown_list.append(&port.port_name);
-        port_dropdown_list.append(&port);
-    }
 
-    info_button.connect_clicked(|_| {
-        println!("TODO: Anleitung");
+
+        //Option 2
+    let serial_ports: Vec<SerialPortInfo> = Vec::new();
+    match serialport::available_ports() {
+        Ok(serial_ports) => serial_ports.into_iter().collect(),//.filter(|port| matches!(port.port_type, serialport::SerialPortType::UsbPort(_))).collect(),
+        Err(_) => Vec::new(),
+    };
+    println!("Available ports: {:?}", serial_ports);
+
+    // for (port, _) in ports {
+    //     println!("{:?}", port);
+    //     port_dropdown_list.append(&port);
+    // }
+
+    help_button.connect_clicked(|_| {
+        // When help button is clicked, open help window
+        build_help_ui();
     });
 
     send_button.connect_clicked(glib::clone!(@weak g_code_vec => move |_|{
         let g_code_vec = g_code_vec.lock().expect("Mutex lock failed").clone();
+        let port_dropdown_list: StringList = builder.object("list_ports").expect("Couldn't get builder");
+        let port_dropdown: DropDown = builder.object("dropdown_ports").expect("Couldn't get builder");
 
-        println!("Send button clicked");
-        // Get selected port
-        let selected_port_option = port_dropdown.selected();
-        let port_option = port_dropdown_list.string(selected_port_option);
+        let val = set_communication(g_code_vec.is_empty(), port_dropdown_list, port_dropdown);
 
-        if g_code_vec.is_empty() {
-            // Refuse if no svg-file was imported
-            println!("Please import SVG-File first");
-            return;
-        }
-        else if port_option.is_none() {
-            // Refuse if no port was selected
-            println!("Please select a port with a connected GrblHAL CNC");
-            return;
-        }
-        else{
-            // Establish connection to selected port
-            let service = service.lock().expect("Mutex lock failed"); // get service from outside the scope
+        let service: DeviceService;
+        let device_desc: (String, DeviceEndpointType);
 
-            let handler = communication_handler(port_option, service);
+        match val {
+            Ok((desc, srv)) => {
+                device_desc = desc;
+                service = srv;
+        
+                let info =  service.get_device_info(&device_desc.0).unwrap();
+                println!("{:#?}", info);
+            },
+            Err(e) => {
+                println!("{:?}", e);
+            }
         }
 
-        println!{"{:?}", g_code_vec};
-        return;
+        // // Get selected port
+        // let selected_port_option = port_dropdown.selected();
+        // let port_option = port_dropdown_list.string(selected_port_option);
+        // if g_code_vec.is_empty() {
+        //     // Refuse if no svg-file was imported
+        //     println!("Please import SVG-File first");
+        //     return;
+        // }
+        // else if port_option.is_none() {
+        //     // Refuse if no port was selected
+        //     println!("Please select a port with a connected GrblHAL CNC");
+        //     return;
+        // }
+        // else{
+        //     // Establish connection to selected port
+        //     // let service = service.lock().expect("Mutex lock failed"); // get service from outside the scope
+        //     // let mut service = DeviceService::new();
+        //     // let mut device_desc: (String, DeviceEndpointType) = (String::new(), DeviceEndpointType::Serial);
+
+        //     let (device_desc, mut service) = setup_communication_handler(port_option);
+
+        //     service.write_device_command(&device_desc.0, format!("{}\n", GET_INFO_EXTENDED).as_str()).unwrap();
+
+        //     let info =  service.get_device_info(&device_desc.0).unwrap();
+        //     println!("{:#?}", info);
+        // }
+
+        // // println!{"{:?}", g_code_vec};
+        // return;
     }));
     
     open_button.connect_clicked(glib::clone!(@weak window, @weak text_view, @weak filename_view => move |_| {
-        // Create filter to only show SVG-Files
-        let filter = gtk::FileFilter::new();
-        filter.add_mime_type("image/svg+xml"); //See: https://stackoverflow.com/questions/11918977/right-mime-type-for-svg-images-with-fonts-embedded
-        filter.set_name(Some("SVG File"));
-        
-        let filters = gio::ListStore::new::<gtk::FileFilter>();
-        filters.append(&filter);
+        // Clone g_code_vec to use and modify it in the closure
+        let g_code_vec_clone = Arc::clone(&g_code_vec);
+
+        let filters = init_filters();
 
         // Create a new file chooser dialog
         let file_chooser = gtk::FileDialog::builder()
@@ -125,9 +154,6 @@ pub fn build_ui(application: &Application) {
             .accept_label("Open")
             .filters(&filters)
             .build();
-
-        // Clone g_code_vec to use and modify it in the closure
-        let g_code_vec_clone = Arc::clone(&g_code_vec);
         
         // Connect the response signal to handle the user's choice
         file_chooser.open(Some(&window), gio::Cancellable::NONE, move |file| {
@@ -162,10 +188,9 @@ pub fn build_ui(application: &Application) {
 
 
 pub fn file_converter(contents: String) -> Vec<String> {
-    let mut document = Document::parse("");
+    // Convert SVG-File to G-Code and returns vector with G-Code-Strings
     let mut string_vector: Vec<String> = Vec::new();
-    
-    document = Document::parse(&contents.as_str());
+    let document = Document::parse(&contents.as_str());
     
     // Convert text of SVG-File to G-Code and display it in text_view
     let config = ConversionConfig::default();
@@ -182,13 +207,64 @@ pub fn file_converter(contents: String) -> Vec<String> {
     return string_vector;
 }
 
-pub fn communication_handler(port_option: Option<GString>, mut service: MutexGuard<'_, DeviceService>) -> (String, DeviceEndpointType) {
+pub fn setup_communication_handler(port_option: Option<GString>) -> ((String, DeviceEndpointType), DeviceService) {
     // Get port name
     let selected_port = port_option.unwrap();
+
+    let mut service = DeviceService::new();
 
     // open the device connection on port
     let device_desc = (selected_port.to_string(), DeviceEndpointType::Serial);
     service.open_device(&device_desc).unwrap();
 
-    device_desc
+    (device_desc, service)
+}
+
+fn build_help_ui() {
+    let help_ui_src = include_str!("help_viewer.ui");
+    let help_builder = Builder::new();
+    help_builder.add_from_string(help_ui_src).expect("Couldn't add from string");
+    let help_window: Window = help_builder.object("help_window").expect("Couldn't get window");
+
+    help_window.present();
+}
+
+fn set_communication(g_vec_bool: bool, port_dropdown_list: StringList, port_dropdown: DropDown) -> Result<((String, DeviceEndpointType), DeviceService)> {
+    // Get selected port
+    let selected_port_option = port_dropdown.selected();
+    let port_option = port_dropdown_list.string(selected_port_option);
+
+    if g_vec_bool {
+        // Refuse if no svg-file was imported
+        return Err(Error::new(ErrorKind::Other, "Please import SVG-File first"));
+
+    }
+    else if port_option.is_none() {
+        // Refuse if no port was selected
+        return Err(Error::new(ErrorKind::Other, "Please select a port with a connected GrblHAL CNC"));
+    }
+    else{
+        // Establish connection to selected port
+        // let service = service.lock().expect("Mutex lock failed"); // get service from outside the scope
+        // let mut service = DeviceService::new();
+        // let mut device_desc: (String, DeviceEndpointType) = (String::new(), DeviceEndpointType::Serial);
+
+        let (device_desc, mut service) = setup_communication_handler(port_option);
+
+        service.write_device_command(&device_desc.0, format!("{}\n", GET_INFO_EXTENDED).as_str()).unwrap();
+
+        return Ok((device_desc, service))
+    }    
+}
+
+fn init_filters() -> gio::ListStore {
+    // Create filter to only show SVG-Files
+    let filter = gtk::FileFilter::new();
+    filter.add_mime_type("image/svg+xml"); //See: https://stackoverflow.com/questions/11918977/right-mime-type-for-svg-images-with-fonts-embedded
+    filter.set_name(Some("SVG File"));
+    
+    let filters = gio::ListStore::new::<gtk::FileFilter>();
+    filters.append(&filter);
+
+    filters
 }
