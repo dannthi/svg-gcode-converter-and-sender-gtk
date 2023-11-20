@@ -9,6 +9,8 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::str;
 use std::sync::{Arc, Mutex};
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::io::{Error, ErrorKind, Result};
 use std::time::Duration;
 use std::thread;
@@ -31,6 +33,7 @@ fn main() {
         Some("de.dhbw.lasergraviermaschine"),
         Default::default(),
     );
+    application.connect_startup(setup_shortcuts);
     application.connect_activate(build_ui);
 
     application.run();
@@ -56,13 +59,6 @@ pub fn build_ui(application: &Application) {
     let help_button: Button = builder.object("info_button").expect("Couldn't get builder");
     let command_open_button: Button = builder.object("command_open_button").expect("Couldn't get builder");
 
-    // Set shortcuts -- doesn't work somehow?
-    // let close_window_trigger = ShortcutTrigger::parse_string("<Control>W").unwrap();
-    // let close_window_action = ShortcutAction::parse_string("window.destroy").unwrap(); // hier fehler
-
-    // let close_window_shortcut = Shortcut::new(Some(close_window_trigger), Some(close_window_action));
-    // window.set_property("close shortcut", &close_window_shortcut);
-    
     // Declare Vector where g-code will be stored in
     let g_code_vec: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 
@@ -90,14 +86,45 @@ pub fn build_ui(application: &Application) {
     // }
 
     help_button.connect_clicked(|_| {
-        // When help button is clicked, open help window
-        build_help_ui();
+        // Show help window
+        let ui_src = include_str!("help_viewer.ui");
+        let id = "help_window"; 
+        let (help_window, help_builder) = build_generic(ui_src, id);
+        help_window.present();
     });
 
-    command_open_button.connect_clicked(|_| {
-        // When help button is clicked, open help window
-        println!("test");
-    });
+    command_open_button.connect_clicked(glib::clone!(@weak port_dropdown_list, @weak port_dropdown => move |_| {
+        // When commandwindow button is clicked, open window
+        let ui_src = include_str!("command_viewer.ui");
+        let id = "command_window";
+        let (command_window, command_builder) = build_generic(ui_src, id);
+        
+        let val = set_communication(false, &port_dropdown_list, &port_dropdown);
+
+        let mut service: DeviceService;
+        let device_desc: (String, DeviceEndpointType);
+        let id : &str;
+
+        match val {
+            Ok((desc, srv)) => {
+                device_desc = desc;
+                service = srv;
+                id = &device_desc.0;
+            },
+            Err(e) => {
+                eprintln!("Application error: {e}");
+                service = DeviceService::new();
+                id = "";
+                // return;
+            }
+        }
+
+        let id = Rc::new(id.to_string());
+
+        get_move_button(command_builder, Rc::new(RefCell::new(service)), Rc::clone(&id));
+
+        command_window.present();
+    }));
 
     send_button.connect_clicked(glib::clone!(@weak g_code_vec, @weak port_dropdown_list, @weak port_dropdown => move |_|{
         let g_code_vec = g_code_vec.lock().expect("Mutex lock failed").clone();
@@ -141,11 +168,10 @@ pub fn build_ui(application: &Application) {
                 },
                 Err(e) => {
                     println!("{:?}", e);
+                    return;
                 }
             }
         }
-
-        // println!{"{:?}", g_code_vec};
         return;
     }));
     
@@ -214,6 +240,11 @@ pub fn file_converter(contents: String) -> Vec<String> {
     return string_vector;
 }
 
+fn setup_shortcuts(app: &Application) {
+    // Set shortcuts -- doesn't work
+    app.set_accels_for_action("window.destroy", &["<Ctrl>w"]);
+}
+
 pub fn setup_communication_handler(port_option: Option<GString>) -> ((String, DeviceEndpointType), DeviceService) {
     // Get port name
     let selected_port = port_option.unwrap();
@@ -227,13 +258,13 @@ pub fn setup_communication_handler(port_option: Option<GString>) -> ((String, De
     (device_desc, service)
 }
 
-fn build_help_ui() {
-    let help_ui_src = include_str!("help_viewer.ui");
-    let help_builder = Builder::new();
-    help_builder.add_from_string(help_ui_src).expect("Couldn't add from string");
-    let help_window: Window = help_builder.object("help_window").expect("Couldn't get window");
+fn build_generic(ui_src: &str, id: &str) -> (Window, Builder) {
+    let generic_builder = Builder::new();
+    generic_builder.add_from_string(ui_src).expect("Couldn't add from string");
+    let generic_window: Window = generic_builder.object(id).expect("Couldn't get window");
 
-    help_window.present();
+    println!("{:?}{:?}", generic_window, generic_builder);
+    (generic_window, generic_builder)
 }
 
 fn set_communication(g_vec_bool: bool, port_dropdown_list: &StringList, port_dropdown: &DropDown) -> Result<((String, DeviceEndpointType), DeviceService)> {
@@ -266,5 +297,49 @@ fn init_filters() -> gio::ListStore {
     let filters = gio::ListStore::new::<gtk::FileFilter>();
     filters.append(&filter);
 
-    filters
+    return filters;
 }
+
+fn manual_move(service: &mut DeviceService, id: &String, x: f32, y: f32) {
+    let x = x.to_string();
+    let y = y.to_string();
+
+    let command = format!("G01 X{} Y{} Z0.0", x, y);
+    service.write_device_command(&id, format!("{}\n", command).as_str()).unwrap();
+}
+
+fn get_move_button(builder: Builder, service: Rc<RefCell<DeviceService>>, id: Rc<String>) {
+    let front_button: Button = builder.object("front").expect("Couldn't get builder");
+    let left_button: Button = builder.object("left").expect("Couldn't get builder");
+    let right_button: Button = builder.object("right").expect("Couldn't get builder");
+    let back_button: Button = builder.object("back").expect("Couldn't get builder");
+    
+    front_button.connect_clicked(glib::clone!(@weak service, @weak id => move |_| {
+        let mut service: std::cell::RefMut<'_, DeviceService> = service.borrow_mut();
+        let service = &mut *service;
+        // manual_move(service, &id, 1.0, 0.0);
+        println!("Move to front");
+    }));
+
+    left_button.connect_clicked(glib::clone!(@weak service, @weak id => move |_| {
+        let mut service: std::cell::RefMut<'_, DeviceService> = service.borrow_mut();
+        let service = &mut *service;
+        // manual_move(service, &id, 0.0, 1.0);
+        println!("Move to left");
+    }));
+
+    // right_button.connect_clicked(move |_| {
+    //     let mut service: std::cell::RefMut<'_, DeviceService> = service.borrow_mut();
+    //     let service = &mut *service;
+    //     manual_move(service, &id, 0.0, -1.0);
+    //     println!("Move to right");
+    // });
+
+    // back_button.connect_clicked(move |_| {
+    //     let mut service: std::cell::RefMut<'_, DeviceService> = service.borrow_mut();
+    //     let service = &mut *service;
+    //     manual_move(service, &id, -1.0, 0.0);
+    //     println!("Move to back");
+    // });
+}
+

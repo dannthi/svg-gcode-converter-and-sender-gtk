@@ -80,6 +80,13 @@
                 <property name="tooltip-text" translatable="yes">Choose port</property>
               </object>
             </child>
+            <child>
+              <object class="GtkButton" id="command_open_button">
+                <property name="label" translatable="yes">Open</property>
+                <property name="icon-name">compass</property>
+                <property name="tooltip-text" translatable="yes">Open Command Window</property>
+              </object>
+            </child>
           </object>
         </child>
       </object>

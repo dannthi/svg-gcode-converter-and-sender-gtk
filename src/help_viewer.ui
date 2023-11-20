@@ -23,6 +23,7 @@
                   4. Wähle aus dem Drop-Down-Menu den Port aus
                     4.1. Sollte kein Port angezeigt werden versuche das Programm (als root/admin) neu zu starten
                   5. Starte mit dem Knopf unten links die Übertragung
+                  6. Mit dem Knopf unten rechts kann die CNC manuell gesteuert werden
                 </property>
               </object>
             </property>
