@@ -122,6 +122,7 @@ pub fn build_ui(application: &Application) {
         let id = Rc::new(id.to_string());
 
         get_move_button(command_builder, Rc::new(RefCell::new(service)), Rc::clone(&id));
+        // get_move_button(command_builder, &mut service, id.to_string());
 
         command_window.present();
     }));
@@ -308,18 +309,53 @@ fn manual_move(service: &mut DeviceService, id: &String, x: f32, y: f32) {
     service.write_device_command(&id, format!("{}\n", command).as_str()).unwrap();
 }
 
+// fn get_move_button(builder: Builder, service: &mut DeviceService, id: String) {
+//     let front_button: Button = builder.object("front").expect("Couldn't get builder");
+//     let left_button: Button = builder.object("left").expect("Couldn't get builder");
+//     let right_button: Button = builder.object("right").expect("Couldn't get builder");
+//     let back_button: Button = builder.object("back").expect("Couldn't get builder");
+    
+//     // front_button.connect_clicked(move |_| {
+//     //     let mut service: std::cell::RefMut<'_, DeviceService> = service.borrow_mut();
+//     //     let service = &mut *service;
+//     //     manual_move(service, &id, 1.0, 0.0);
+//     //     println!("Move to front");
+//     // });
+
+//     left_button.connect_clicked( move |_| {
+//         // let mut service: std::cell::RefMut<'_, DeviceService> = service.borrow_mut();
+//         // let service = &mut *service;
+//         manual_move(&mut service, &id, 0.0, 1.0);
+//         println!("Move to left");
+//     });
+
+//     // right_button.connect_clicked(move |_| {
+//     //     let mut service: std::cell::RefMut<'_, DeviceService> = service.borrow_mut();
+//     //     let service = &mut *service;
+//     //     manual_move(service, &id, 0.0, -1.0);
+//     //     println!("Move to right");
+//     // });
+
+//     // back_button.connect_clicked(move |_| {
+//     //     let mut service: std::cell::RefMut<'_, DeviceService> = service.borrow_mut();
+//     //     let service = &mut *service;
+//     //     manual_move(service, &id, -1.0, 0.0);
+//     //     println!("Move to back");
+//     // });
+// }
+
 fn get_move_button(builder: Builder, service: Rc<RefCell<DeviceService>>, id: Rc<String>) {
     let front_button: Button = builder.object("front").expect("Couldn't get builder");
     let left_button: Button = builder.object("left").expect("Couldn't get builder");
     let right_button: Button = builder.object("right").expect("Couldn't get builder");
     let back_button: Button = builder.object("back").expect("Couldn't get builder");
     
-    front_button.connect_clicked(glib::clone!(@weak service, @weak id => move |_| {
-        let mut service: std::cell::RefMut<'_, DeviceService> = service.borrow_mut();
-        let service = &mut *service;
-        // manual_move(service, &id, 1.0, 0.0);
-        println!("Move to front");
-    }));
+    // front_button.connect_clicked(move |_| {
+    //     let mut service: std::cell::RefMut<'_, DeviceService> = service.borrow_mut();
+    //     let service = &mut *service;
+    //     manual_move(service, &id, 1.0, 0.0);
+    //     println!("Move to front");
+    // });
 
     left_button.connect_clicked(glib::clone!(@weak service, @weak id => move |_| {
         let mut service: std::cell::RefMut<'_, DeviceService> = service.borrow_mut();
@@ -342,4 +378,3 @@ fn get_move_button(builder: Builder, service: Rc<RefCell<DeviceService>>, id: Rc
     //     println!("Move to back");
     // });
 }
-
