@@ -2,83 +2,97 @@
 <interface>
   <object class="GtkWindow" id="command_window">
     <property name="visible">True</property>
-    <property name="default-width">200</property>
+    <property name="default-width">400</property>
     <property name="default-height">200</property>
     <property name="title" translatable="yes">Command Window</property>
     <child>
-      <object class="GtkBox" id="vertical_box_file">
-      <property name="spacing">10</property>
+      <object class="GtkBox" id="master_box_file">
       <property name="orientation">vertical</property>
         <child>
-          <object class="GtkBox" id="horizontal_box_file_front">
-            <property name="spacing">10</property>
-            <property name="orientation">horizontal</property>
-            <!-- <child>
-              <object class="GtkButton" id="frontleft">
-                <property name="icon-name">-</property>
-                <property name="tooltip-text" translatable="yes">frontleft</property>
-              </object>
-            </child> -->
+          <object class="GtkBox" id="vertical_box_file">
+          <property name="spacing">10</property>
+          <property name="orientation">vertical</property>
+          <!-- <property name="position">0</property> -->
             <child>
-              <object class="GtkButton" id="front">
-                <property name="icon-name">go-up-symbolic</property>
-                <property name="tooltip-text" translatable="yes">front</property>
+              <object class="GtkBox" id="horizontal_box_file_front">
+                <property name="spacing">10</property>
+                <property name="orientation">horizontal</property>
+                <child>
+                  <placeholder/>
+                </child>
+                <child>
+                  <object class="GtkButton" id="front">
+                    <property name="icon-name">go-up-symbolic</property>
+                    <property name="tooltip-text" translatable="yes">front</property>
+                  </object>
+                </child>
+                <child>
+                  <placeholder/>
+                </child>
               </object>
             </child>
-            <!-- <child>
-              <object class="GtkButton" id="frontright">
-                <property name="icon-name">-</property>
-                <property name="tooltip-text" translatable="yes">frontright</property>
+            <child>
+              <object class="GtkBox" id="horizontal_box_file_mid">
+                <property name="spacing">10</property>
+                <property name="orientation">horizontal</property>
+                <child>
+                  <object class="GtkButton" id="left">
+                    <property name="icon-name">go-left-symbolic</property>
+                    <property name="tooltip-text" translatable="yes">left</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="home">
+                    <property name="icon-name">redhat-home</property>
+                    <property name="tooltip-text" translatable="yes">home</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="right">
+                    <property name="icon-name">go-right-symbolic</property>
+                    <property name="tooltip-text" translatable="yes">right</property>
+                  </object>
+                </child>
               </object>
-            </child> -->
+            </child>
+            <child>
+              <object class="GtkBox" id="horizontal_box_file_back">
+                <property name="spacing">10</property>
+                <property name="orientation">horizontal</property>
+                <!-- <property name="position">0</property> -->
+                <child>
+                  <placeholder/>
+                </child>
+                <child>
+                  <object class="GtkButton" id="back">
+                    <property name="icon-name">go-down-symbolic</property>
+                    <property name="tooltip-text" translatable="yes">back</property>
+                  </object>
+                </child>
+                <child>
+                  <placeholder/>
+                </child>
+              </object>
+            </child>
           </object>
         </child>
         <child>
-          <object class="GtkBox" id="horizontal_box_file_mid">
-            <property name="spacing">10</property>
-            <property name="orientation">horizontal</property>
-            <child>
-              <object class="GtkButton" id="left">
-                <property name="icon-name">go-left-symbolic</property>
-                <property name="tooltip-text" translatable="yes">left</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkButton" id="home">
-                <property name="icon-name">redhat-home</property>
-                <property name="tooltip-text" translatable="yes">home</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkButton" id="right">
-                <property name="icon-name">go-right-symbolic</property>
-                <property name="tooltip-text" translatable="yes">right</property>
-              </object>
-            </child>
-          </object>
+          <object class="GtkSeparator"/>
         </child>
         <child>
-          <object class="GtkBox" id="horizontal_box_file_back">
+          <object class="GtkSeparator"/>
+        </child>
+        <child>
+          <object class="GtkBox" id="right_side_box">
             <property name="spacing">10</property>
-            <property name="orientation">horizontal</property>
-            <!-- <child>
-              <object class="GtkButton" id="backleft">
-                <property name="icon-name">-</property>
-                <property name="tooltip-text" translatable="yes">backleft</property>
-              </object>
-            </child> -->
+            <property name="orientation">vertical</property>
             <child>
-              <object class="GtkButton" id="back">
-                <property name="icon-name">go-down-symbolic</property>
-                <property name="tooltip-text" translatable="yes">back</property>
+              <object class="GtkTextView" id="device_info">
+                <property name="editable">False</property>
+                <property name="wrap-mode">GTK_WRAP_WORD</property>
+                <property name="hexpand">True</property>
               </object>
             </child>
-            <!-- <child>
-              <object class="GtkButton" id="backright">
-                <property name="icon-name">-</property>
-                <property name="tooltip-text" translatable="yes">backright</property>
-              </object>
-            </child> -->
           </object>
         </child>
       </object>

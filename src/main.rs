@@ -15,15 +15,17 @@ use std::io::{Error, ErrorKind, Result};
 use std::time::Duration;
 use std::thread;
 
+use grbli::device::response::firmware::driver;
+use grbli::device::response::state::gcode_state;
 // gtk imports
 use gtk4 as gtk;
 use gtk::prelude::*;
 use gtk::{gio, glib, Application, ApplicationWindow, Builder, Button, DropDown, TextView, StringList, glib::GString, Window};
-
 // additional imports
 use svg2gcode::{svg2program, ConversionOptions, ConversionConfig, Machine};
 use grbli::service::device_service::{DeviceService, DeviceEndpointType};
 use grbli::device::command::{state, settings};
+use grbli::device::DeviceInfo;
 
 use roxmltree::Document;
 
@@ -58,7 +60,7 @@ pub fn build_ui(application: &Application) {
     let port_dropdown: DropDown = builder.object("dropdown_ports").expect("Couldn't get builder");
     let help_button: Button = builder.object("info_button").expect("Couldn't get builder");
     let command_open_button: Button = builder.object("command_open_button").expect("Couldn't get builder");
-
+    
     // Declare Vector where g-code will be stored in
     let g_code_vec: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 
@@ -67,7 +69,6 @@ pub fn build_ui(application: &Application) {
     println!("Available ports: {:?}", ports);
 
     for (port, _) in ports {
-        println!("{:?}", port);
         port_dropdown_list.append(&port);
     }
 
@@ -80,11 +81,12 @@ pub fn build_ui(application: &Application) {
         help_window.present();
     });
 
-    command_open_button.connect_clicked(glib::clone!(@weak port_dropdown_list, @weak port_dropdown => move |_| {
+    command_open_button.connect_clicked(glib::clone!(@weak port_dropdown_list, @weak port_dropdown  => move |_| {
         // When commandwindow button is clicked, open window
         let ui_src = include_str!("command_viewer.ui");
         let id = "command_window";
         let (command_window, command_builder) = build_generic(ui_src, id);
+        let device_info_view: TextView = command_builder.object("device_info").expect("Couldn't get device_info_view");
         
         let val = set_communication(false, &port_dropdown_list, &port_dropdown);
 
@@ -102,13 +104,40 @@ pub fn build_ui(application: &Application) {
                 eprintln!("Application error: {e}");
                 service = DeviceService::new();
                 id = "";
-                // return;
+                return;
             }
         }
 
         let id = Rc::new(id.to_string());
 
-        get_move_button(command_builder, Rc::new(RefCell::new(service)), Rc::clone(&id));
+        let mut service_move = Rc::new(RefCell::new(service));
+        let mut service_status = service_move.clone();
+
+        get_move_button(&command_builder, service_move, Rc::clone(&id));
+
+        // read status from cnc
+        let info = get_status(&command_builder, service_status, Rc::clone(&id));
+
+        // println!("{:?}", info);
+
+        let id = info.id();
+        let firmware = {
+            let buf = info.firmware_info();
+            let buf = buf.version().unwrap();
+            (buf.version(), buf.name())
+        };
+        let driver = info.machine_info();
+        let gcode_state = info.gcode_state();
+
+        // define String to store infos cnc is providing
+        let text_buffer = format!("id: {}\n\
+        firmware name: {}\n\
+        firmware version: {}\n\
+        machine state: {:?}\n\
+        G-Code state: {:?}\n\
+        ", id, firmware.1, firmware.0, driver, gcode_state);
+        
+        device_info_view.buffer().set_text(text_buffer.as_str());
 
         command_window.present();
     }));
@@ -135,6 +164,9 @@ pub fn build_ui(application: &Application) {
             // Establish connection to selected port
             let val = set_communication(g_code_vec.is_empty(), &port_dropdown_list, &port_dropdown);
 
+            println!("Send to port: {:?}\n", port_option);
+            println!("Send G-Code: {:?}", g_code_vec);
+
             let mut service: DeviceService;
             let device_desc: (String, DeviceEndpointType);
 
@@ -143,15 +175,7 @@ pub fn build_ui(application: &Application) {
                     device_desc = desc;
                     service = srv;
                     let id = &device_desc.0;
-                    service.write_device_command(id, format!("{}\n", state::GET_INFO_EXTENDED).as_str()).unwrap();
-                    service.write_device_command(id, format!("{}\n", settings::GET_ALL).as_str()).unwrap();
-                    service.write_device_command(id, format!("{}\n", settings::GET_DETAILS).as_str()).unwrap();
-                    service.write_device_command(id, format!("{}\n", settings::GET_GROUPS).as_str()).unwrap();
-
-                    thread::sleep(Duration::from_millis(100)); // give uC time to process
-
-                    let info =  service.get_device_info(&device_desc.0).unwrap();
-                    println!("{:#?}", info);
+                    //Send G-Code here
                 },
                 Err(e) => {
                     println!("{:?}", e);
@@ -191,12 +215,26 @@ pub fn build_ui(application: &Application) {
                 *temp_g_code_vec = file_converter(contents);
                 let mut g_code_string = String::new();
         
-        
+                // safe gcode as string
                 for x in temp_g_code_vec.iter() {
                     g_code_string.push_str(x.as_str());
-                    g_code_string.push_str("\n");
+                    // write coordinates in same line as G0 or G1
+                    if x.as_str() == "G0" || x.as_str() == "G1" {
+                        // g_code_string.push_str(" ");
+                    }
+                    // check if first element of str is X
+                    else if x.as_str().starts_with("X") {
+                        // g_code_string.push_str(" ");
+                    }
+                    else if x.as_str() == "G90" {
+                        g_code_string.push_str("\nG17\nG94\n");
+                    }
+                    else{
+                        g_code_string.push_str("\n");
+                    }
                 }
-                println!("{:?}", filename.to_str().unwrap());
+
+                // write filename and gcodestring into textfields
                 filename_view.buffer().set_text(&filename.to_str().unwrap());
                 text_view.buffer().set_text(&g_code_string);     
             }
@@ -217,6 +255,7 @@ pub fn file_converter(contents: String) -> Vec<String> {
     let options = ConversionOptions::default();
     let machine = Machine::default();
 
+    
     let program =
         svg2program(&document.unwrap(), &config, options, machine);
 
@@ -250,7 +289,6 @@ fn build_generic(ui_src: &str, id: &str) -> (Window, Builder) {
     generic_builder.add_from_string(ui_src).expect("Couldn't add from string");
     let generic_window: Window = generic_builder.object(id).expect("Couldn't get window");
 
-    println!("{:?}{:?}", generic_window, generic_builder);
     (generic_window, generic_builder)
 }
 
@@ -262,7 +300,6 @@ fn set_communication(g_vec_bool: bool, port_dropdown_list: &StringList, port_dro
     if g_vec_bool {
         // Refuse if no svg-file was imported
         return Err(Error::new(ErrorKind::Other, "Please import SVG-File first"));
-
     }
     else if port_option.is_none() {
         // Refuse if no port was selected
@@ -288,15 +325,24 @@ fn init_filters() -> gio::ListStore {
 }
 
 fn manual_move(service: &mut DeviceService, id: &String, x: f32, y: f32) {
-    let x = x.to_string();
-    let y = y.to_string();
-
-    let command = format!("G01 X{} Y{} Z0.0", x, y);
-    service.write_device_command(&id, format!("{}\n", command).as_str()).unwrap();
+    if x == 1.0 {
+        service.write_device_command(&id, format!("$J=G21G91X1F100\n").as_str()).unwrap();
+    }
+    else if x == -1.0 {
+        service.write_device_command(&id, format!("$J=G21G91X-1F100\n").as_str()).unwrap();
+    }
+    else if y == 1.0 {
+        service.write_device_command(&id, format!("$J=G21G91Y1F100\n").as_str()).unwrap();
+    }
+    else if y == -1.0 {
+        service.write_device_command(&id, format!("$J=G21G91Y-1F100\n").as_str()).unwrap();
+    }
+    else {
+        println!("Error");
+    }
 }
 
-
-fn get_move_button(builder: Builder, service: Rc<RefCell<DeviceService>>, id: Rc<String>) {
+fn get_move_button(builder: &Builder, service: Rc<RefCell<DeviceService>>, id: Rc<String>) {
     let front_button: Button = builder.object("front").expect("Couldn't get builder");
     let left_button: Button = builder.object("left").expect("Couldn't get builder");
     let right_button: Button = builder.object("right").expect("Couldn't get builder");
@@ -323,8 +369,22 @@ fn get_move_button(builder: Builder, service: Rc<RefCell<DeviceService>>, id: Rc
     back_button.connect_clicked(glib::clone!(@strong service, @strong id => move |_| {
         let mut service = service.borrow_mut();
         manual_move(&mut service, &id, -1.0, 0.0);
-        println!("Move to down");
+        println!("Move to back");
     }));
     
 }
 
+fn get_status(builder: &Builder, service: Rc<RefCell<DeviceService>>, id: Rc<String>) -> DeviceInfo {
+    let mut service = service.borrow_mut();
+    service.write_device_command(&id, format!("{}\n", state::GET_INFO_EXTENDED).as_str()).unwrap();
+    service.write_device_command(&id, format!("{}\n", settings::GET_ALL).as_str()).unwrap();
+    service.write_device_command(&id, format!("{}\n", settings::GET_DETAILS).as_str()).unwrap();
+    service.write_device_command(&id, format!("{}\n", settings::GET_GROUPS).as_str()).unwrap();
+
+    thread::sleep(Duration::from_millis(100)); // give uC time to process
+
+    let info =  service.get_device_info(&id);
+    println!("{:#?}", info);
+
+    info.unwrap()
+}
