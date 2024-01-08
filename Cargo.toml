@@ -1,5 +1,5 @@
 [package]
-name = "lasergraviermaschiene-schnittstelle"
+name = "svg-gcode-converter-and-sender-gtk"
 version = "0.1.0"
 edition = "2021"
 

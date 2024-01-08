@@ -226,9 +226,9 @@ pub fn build_ui(application: &Application) {
                     else if x.as_str().starts_with("X") {
                         // g_code_string.push_str(" ");
                     }
-                    else if x.as_str() == "G90" {
-                        g_code_string.push_str("\nG17\nG94\n");
-                    }
+                    // else if x.as_str() == "G90" {
+                    //     g_code_string.push_str("\nG17\nG94\n");
+                    // }
                     else{
                         g_code_string.push_str("\n");
                     }
