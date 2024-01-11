@@ -18,7 +18,10 @@
                 <property name="spacing">10</property>
                 <property name="orientation">horizontal</property>
                 <child>
-                  <placeholder/>
+                  <object class="GtkButton" id="setzero">
+                    <property name="icon-name">crosshairs</property>
+                    <property name="tooltip-text" translatable="yes">left</property>
+                  </object>
                 </child>
                 <child>
                   <object class="GtkButton" id="front">
@@ -61,7 +64,10 @@
                 <property name="orientation">horizontal</property>
                 <!-- <property name="position">0</property> -->
                 <child>
-                  <placeholder/>
+                  <object class="GtkButton" id="gozero">
+                    <property name="icon-name">gtk-refresh</property>
+                    <property name="tooltip-text" translatable="yes">left</property>
+                  </object>
                 </child>
                 <child>
                   <object class="GtkButton" id="back">

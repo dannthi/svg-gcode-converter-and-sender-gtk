@@ -143,9 +143,15 @@ pub fn build_ui(application: &Application) {
     }));
 
     send_button.connect_clicked(glib::clone!(@weak g_code_vec, @weak port_dropdown_list, @weak port_dropdown => move |_|{
-        let g_code_vec = g_code_vec.lock().expect("Mutex lock failed").clone();
-        // let port_dropdown_list: StringList = builder.object("list_ports").expect("Couldn't get builder");
-        // let port_dropdown: DropDown = builder.object("dropdown_ports").expect("Couldn't get builder");
+        let g_code_vec = g_code_vec.lock().expect("Mutex lock failed").clone(); // import gcode
+
+        // Test G-Code
+        // let g_code_vec = vec![
+        //     "G21", "G90", "G17", "G94", 
+        //     "M3 S1000", "G0 X0 Y0", "G1 X0 Y0 F1000", 
+        //     "G1 Y10", "G1 X10", "G1 Y0", "G1 X0", "M5"
+        //     ];
+        // let g_code_vec: Vec<String> = g_code_vec.iter().map(|&s| s.to_string()).collect();
 
         // Get selected port
         let selected_port_option = port_dropdown.selected();
@@ -167,19 +173,18 @@ pub fn build_ui(application: &Application) {
             println!("Send to port: {:?}\n", port_option);
             println!("Send G-Code: {:?}", g_code_vec);
 
-            let mut service: DeviceService;
+            let service: Rc<RefCell<DeviceService>>;
             let device_desc: (String, DeviceEndpointType);
 
             match val {
                 Ok((desc, srv)) => {
                     device_desc = desc;
-                    service = srv;
-                    let id = &device_desc.0;
-                    //Send G-Code here
+                    service = Rc::new(RefCell::new(srv));
+                    let id = Rc::new(device_desc.0.to_string());
+                    send_gcode(service, id, g_code_vec);
                 },
                 Err(e) => {
                     println!("{:?}", e);
-                    return;
                 }
             }
         }
@@ -218,20 +223,7 @@ pub fn build_ui(application: &Application) {
                 // safe gcode as string
                 for x in temp_g_code_vec.iter() {
                     g_code_string.push_str(x.as_str());
-                    // write coordinates in same line as G0 or G1
-                    if x.as_str() == "G0" || x.as_str() == "G1" {
-                        // g_code_string.push_str(" ");
-                    }
-                    // check if first element of str is X
-                    else if x.as_str().starts_with("X") {
-                        // g_code_string.push_str(" ");
-                    }
-                    // else if x.as_str() == "G90" {
-                    //     g_code_string.push_str("\nG17\nG94\n");
-                    // }
-                    else{
-                        g_code_string.push_str("\n");
-                    }
+                    g_code_string.push_str("\n");
                 }
 
                 // write filename and gcodestring into textfields
@@ -259,10 +251,33 @@ pub fn file_converter(contents: String) -> Vec<String> {
     let program =
         svg2program(&document.unwrap(), &config, options, machine);
 
-    for x in program.iter() {
-        string_vector.push(x.to_string());
+    for (i, x) in program.iter().enumerate() {
+        if x.to_string().starts_with("X") || x.to_string().starts_with("Y"){
+            continue;
+        }
+        else if x.to_string() == "G90" {
+            string_vector.push(x.to_string());
+            string_vector.push("G17".to_string());
+            string_vector.push("G94".to_string());
+        }
+        else if x.to_string().starts_with("G") { // write coordinates in same line as G0 or G1 or G2
+            let mut temp_string = x.to_string();
+            if program[i+2].to_string().starts_with("Y"){
+                temp_string.push_str(program[i+1].to_string().as_str());
+                temp_string.push_str(program[i+2].to_string().as_str());
+            }
+            else if program[i+1].to_string().starts_with("X"){
+                temp_string.push_str(program[i+1].to_string().as_str());
+            }
+            string_vector.push(temp_string);
+        }
+        else if x.to_string().starts_with(";"){
+            // sort comments out, do nothing
+        }
     }
 
+    print!("{:?}", string_vector);
+    
     return string_vector;
 }
 
@@ -324,22 +339,9 @@ fn init_filters() -> gio::ListStore {
     return filters;
 }
 
-fn manual_move(service: &mut DeviceService, id: &String, x: f32, y: f32) {
-    if x == 1.0 {
-        service.write_device_command(&id, format!("$J=G21G91X1F100\n").as_str()).unwrap();
-    }
-    else if x == -1.0 {
-        service.write_device_command(&id, format!("$J=G21G91X-1F100\n").as_str()).unwrap();
-    }
-    else if y == 1.0 {
-        service.write_device_command(&id, format!("$J=G21G91Y1F100\n").as_str()).unwrap();
-    }
-    else if y == -1.0 {
-        service.write_device_command(&id, format!("$J=G21G91Y-1F100\n").as_str()).unwrap();
-    }
-    else {
-        println!("Error");
-    }
+fn manual_move(service: &mut DeviceService, id: &String, y: f32, x: f32) {
+    service.write_device_command(&id, format!("$J=G21G91X{}F100\n", x).as_str()).unwrap();
+    service.write_device_command(&id, format!("$J=G21G91Y{}F100\n", y).as_str()).unwrap();
 }
 
 fn get_move_button(builder: &Builder, service: Rc<RefCell<DeviceService>>, id: Rc<String>) {
@@ -347,29 +349,43 @@ fn get_move_button(builder: &Builder, service: Rc<RefCell<DeviceService>>, id: R
     let left_button: Button = builder.object("left").expect("Couldn't get builder");
     let right_button: Button = builder.object("right").expect("Couldn't get builder");
     let back_button: Button = builder.object("back").expect("Couldn't get builder");
+    let set_zero: Button = builder.object("setzero").expect("Couldn't get builder");
+    let go_zero: Button = builder.object("gozero").expect("Couldn't get builder");
 
     front_button.connect_clicked(glib::clone!(@strong service, @strong id => move |_| {
         let mut service = service.borrow_mut();
-        manual_move(&mut service, &id, 1.0, 0.0);
+        manual_move(&mut service, &id, 5.0, 0.0);
         println!("Move to front");
     }));
 
     left_button.connect_clicked(glib::clone!(@strong service, @strong id => move |_| {
         let mut service = service.borrow_mut();
-        manual_move(&mut service, &id, 0.0, -1.0);
+        manual_move(&mut service, &id, 0.0, -5.0);
         println!("Move to left");
     }));
 
     right_button.connect_clicked(glib::clone!(@strong service, @strong id => move |_| {
         let mut service = service.borrow_mut();
-        manual_move(&mut service, &id, 0.0, 1.0);
+        manual_move(&mut service, &id, 0.0, 5.0);
         println!("Move to right");
     }));
 
     back_button.connect_clicked(glib::clone!(@strong service, @strong id => move |_| {
         let mut service = service.borrow_mut();
-        manual_move(&mut service, &id, -1.0, 0.0);
+        manual_move(&mut service, &id, -5.0, 0.0);
         println!("Move to back");
+    }));
+
+    set_zero.connect_clicked(glib::clone!(@strong service, @strong id => move |_| {
+        let mut service = service.borrow_mut();
+        service.write_device_command(&id, "G10 P0 L20 X0 Y0\n").unwrap();
+        println!("Set zero");
+    }));
+
+    go_zero.connect_clicked(glib::clone!(@strong service, @strong id => move |_| {
+        let mut service = service.borrow_mut();
+        service.write_device_command(&id, "G0 X0 Y0\n").unwrap();
+        println!("Go to zero");
     }));
     
 }
@@ -387,4 +403,15 @@ fn get_status(builder: &Builder, service: Rc<RefCell<DeviceService>>, id: Rc<Str
     println!("{:#?}", info);
 
     info.unwrap()
+}
+
+fn send_gcode(service: Rc<RefCell<DeviceService>>, id: Rc<String>, commands: Vec<String>) {
+    let mut service = service.borrow_mut();
+    println!("Sending G-Code...");
+    for x in commands.iter() {
+        service.write_device_command(&id, format!("{}\n", x).as_str()).unwrap();
+        println!("Send: {}", x);
+        thread::sleep(Duration::from_millis(100)); // give uC time to process
+    }
+    println!("Finished sending G-Code");
 }
