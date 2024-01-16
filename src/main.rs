@@ -15,18 +15,20 @@ use std::io::{Error, ErrorKind, Result};
 use std::time::Duration;
 use std::thread;
 
+// grbli imports
 use grbli::device::response::firmware::driver;
 use grbli::device::response::state::gcode_state;
-// gtk imports
-use gtk4 as gtk;
-use gtk::prelude::*;
-use gtk::{gio, glib, Application, ApplicationWindow, Builder, Button, DropDown, TextView, StringList, glib::GString, Window};
-// additional imports
-use svg2gcode::{svg2program, ConversionOptions, ConversionConfig, Machine};
 use grbli::service::device_service::{DeviceService, DeviceEndpointType};
 use grbli::device::command::{state, settings};
 use grbli::device::DeviceInfo;
 
+// gtk imports
+use gtk4 as gtk;
+use gtk::prelude::*;
+use gtk::{gio, glib, Application, ApplicationWindow, Builder, Button, DropDown, TextView, StringList, glib::GString, Window};
+
+// additional imports
+use svg2gcode::{svg2program, ConversionOptions, ConversionConfig, Machine};
 use roxmltree::Document;
 
 fn main() { 
@@ -71,7 +73,6 @@ pub fn build_ui(application: &Application) {
     for (port, _) in ports {
         port_dropdown_list.append(&port);
     }
-
 
     help_button.connect_clicked(|_| {
         // Show help window
@@ -145,47 +146,27 @@ pub fn build_ui(application: &Application) {
     send_button.connect_clicked(glib::clone!(@weak g_code_vec, @weak port_dropdown_list, @weak port_dropdown => move |_|{
         let g_code_vec = g_code_vec.lock().expect("Mutex lock failed").clone(); // import gcode
 
-        // Test G-Code
-        // let g_code_vec = vec![
-        //     "G21", "G90", "G17", "G94", 
-        //     "M3 S1000", "G0 X0 Y0", "G1 X0 Y0 F1000", 
-        //     "G1 Y10", "G1 X10", "G1 Y0", "G1 X0", "M5"
-        //     ];
-        // let g_code_vec: Vec<String> = g_code_vec.iter().map(|&s| s.to_string()).collect();
-
         // Get selected port
         let selected_port_option = port_dropdown.selected();
         let port_option = port_dropdown_list.string(selected_port_option);
-        if g_code_vec.is_empty() {
-            // Refuse if no svg-file was imported
-            println!("Please import SVG-File first");
-            return;
-        }
-        else if port_option.is_none() {
-            // Refuse if no port was selected
-            println!("Please select a port with a connected GrblHAL CNC");
-            return;
-        }
-        else {
-            // Establish connection to selected port
-            let val = set_communication(g_code_vec.is_empty(), &port_dropdown_list, &port_dropdown);
+        // Establish connection to selected port
+        let val = set_communication(g_code_vec.is_empty(), &port_dropdown_list, &port_dropdown);
 
-            println!("Send to port: {:?}\n", port_option);
-            println!("Send G-Code: {:?}", g_code_vec);
+        println!("Send to port: {:?}\n", port_option);
+        println!("Send G-Code: {:?}", g_code_vec);
 
-            let service: Rc<RefCell<DeviceService>>;
-            let device_desc: (String, DeviceEndpointType);
+        let service: Rc<RefCell<DeviceService>>;
+        let device_desc: (String, DeviceEndpointType);
 
-            match val {
-                Ok((desc, srv)) => {
-                    device_desc = desc;
-                    service = Rc::new(RefCell::new(srv));
-                    let id = Rc::new(device_desc.0.to_string());
-                    send_gcode(service, id, g_code_vec);
-                },
-                Err(e) => {
-                    println!("{:?}", e);
-                }
+        match val {
+            Ok((desc, srv)) => {
+                device_desc = desc;
+                service = Rc::new(RefCell::new(srv));
+                let id = Rc::new(device_desc.0.to_string());
+                send_gcode(service, id, g_code_vec);
+            },
+            Err(e) => {
+                println!("{:?}", e);
             }
         }
         return;
@@ -236,33 +217,28 @@ pub fn build_ui(application: &Application) {
     window.present();
 }
 
-
-pub fn file_converter(contents: String) -> Vec<String> {
-    // Convert SVG-File to G-Code and returns vector with G-Code-Strings
+fn format_gcode(program: Vec<String>) -> Vec<String> {
     let mut string_vector: Vec<String> = Vec::new();
-    let document = Document::parse(&contents.as_str());
-    
-    // Convert text of SVG-File to G-Code and display it in text_view
-    let config = ConversionConfig::default();
-    let options = ConversionOptions::default();
-    let machine = Machine::default();
-
-    
-    let program =
-        svg2program(&document.unwrap(), &config, options, machine);
 
     for (i, x) in program.iter().enumerate() {
-        if x.to_string().starts_with("X") || x.to_string().starts_with("Y"){
+        if x.to_string().starts_with("X") || x.to_string().starts_with("Y") || x.to_string().starts_with("F") {
             continue;
         }
-        else if x.to_string() == "G90" {
-            string_vector.push(x.to_string());
-            string_vector.push("G17".to_string());
-            string_vector.push("G94".to_string());
+        else if x.to_string() == "G90" { // Add to beginning of gcode
+            string_vector.push(x.to_string()); // Choose absolute coordinates
+            string_vector.push("G17".to_string()); // Choose XY-Plane
+            string_vector.push("G94".to_string()); // Choose feedrate in mm/min
+            string_vector.push("M3 S1000".to_string()); // Turn Spindle on
+            // string_vector.push("F300".to_string()); // Set initial Feedrate
         }
         else if x.to_string().starts_with("G") { // write coordinates in same line as G0 or G1 or G2
             let mut temp_string = x.to_string();
-            if program[i+2].to_string().starts_with("Y"){
+            if program[i+3].to_string().starts_with("F"){
+                temp_string.push_str(program[i+1].to_string().as_str());
+                temp_string.push_str(program[i+2].to_string().as_str());
+                temp_string.push_str(program[i+3].to_string().as_str());
+            } 
+            else if program[i+2].to_string().starts_with("Y"){
                 temp_string.push_str(program[i+1].to_string().as_str());
                 temp_string.push_str(program[i+2].to_string().as_str());
             }
@@ -273,17 +249,44 @@ pub fn file_converter(contents: String) -> Vec<String> {
         }
         else if x.to_string().starts_with(";"){
             // sort comments out, do nothing
+            continue;
+        }
+        else if x.to_string() == "M2"{
+            // Add to end of gcode
+            string_vector.push("M5".to_string()); // Turns spindle off
+            string_vector.push(x.to_string()); // End of program
+        }
+        else {
+            // Everything else are feedrates (F) or M-Codes
+            string_vector.push(x.to_string());
+            // continue;
         }
     }
 
-    print!("{:?}", string_vector);
+    string_vector
+}
+
+pub fn file_converter(contents: String) -> Vec<String> {
+    // Convert SVG-File to G-Code and returns vector with G-Code-Strings
+    // let mut string_vector: Vec<String> = Vec::new();
+    let document = Document::parse(&contents.as_str());
     
+    // Convert text of SVG-File to G-Code and display it in text_view
+    let config = ConversionConfig::default();
+    let options = ConversionOptions::default();
+    let machine = Machine::default();
+
+    
+    let program = svg2program(&document.unwrap(), &config, options, machine);
+
+    let temp_string_vector: Vec<String> = program.iter().map(|x| x.to_string()).collect();
+    let string_vector = format_gcode(temp_string_vector);
     return string_vector;
 }
 
 fn setup_shortcuts(app: &Application) {
     // Set shortcuts -- doesn't work
-    app.set_accels_for_action("window.destroy", &["<Ctrl>w"]);
+    app.set_accels_for_action("*.destroy", &["<Ctrl>w"]);
 }
 
 pub fn setup_communication_handler(port_option: Option<GString>) -> ((String, DeviceEndpointType), DeviceService) {

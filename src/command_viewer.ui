@@ -20,13 +20,13 @@
                 <child>
                   <object class="GtkButton" id="setzero">
                     <property name="icon-name">crosshairs</property>
-                    <property name="tooltip-text" translatable="yes">left</property>
+                    <property name="tooltip-text" translatable="yes">Set zero point</property>
                   </object>
                 </child>
                 <child>
                   <object class="GtkButton" id="front">
                     <property name="icon-name">go-up-symbolic</property>
-                    <property name="tooltip-text" translatable="yes">front</property>
+                    <property name="tooltip-text" translatable="yes">Move to front</property>
                   </object>
                 </child>
                 <child>
@@ -41,19 +41,19 @@
                 <child>
                   <object class="GtkButton" id="left">
                     <property name="icon-name">go-left-symbolic</property>
-                    <property name="tooltip-text" translatable="yes">left</property>
+                    <property name="tooltip-text" translatable="yes">Move to left</property>
                   </object>
                 </child>
                 <child>
                   <object class="GtkButton" id="home">
                     <property name="icon-name">redhat-home</property>
-                    <property name="tooltip-text" translatable="yes">home</property>
+                    <property name="tooltip-text" translatable="yes">Button has no function</property>
                   </object>
                 </child>
                 <child>
                   <object class="GtkButton" id="right">
                     <property name="icon-name">go-right-symbolic</property>
-                    <property name="tooltip-text" translatable="yes">right</property>
+                    <property name="tooltip-text" translatable="yes">Move to right</property>
                   </object>
                 </child>
               </object>
@@ -66,13 +66,13 @@
                 <child>
                   <object class="GtkButton" id="gozero">
                     <property name="icon-name">gtk-refresh</property>
-                    <property name="tooltip-text" translatable="yes">left</property>
+                    <property name="tooltip-text" translatable="yes">Move to zero point</property>
                   </object>
                 </child>
                 <child>
                   <object class="GtkButton" id="back">
                     <property name="icon-name">go-down-symbolic</property>
-                    <property name="tooltip-text" translatable="yes">back</property>
+                    <property name="tooltip-text" translatable="yes">Move back</property>
                   </object>
                 </child>
                 <child>
